@@ -1,0 +1,172 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ISPL Social Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/recharts/umd/Recharts.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;700;900&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'DM Sans', sans-serif; background-color: #0d0d0f; color: #f1f1f1; }
+        .custom-scrollbar::-webkit-scrollbar { height: 4px; width: 4px; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo } = React;
+        const { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } = Recharts;
+
+        const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+        const SEASON_TYPES = ["Off-Season", "Pre-Season", "In-Season"];
+        const STORAGE_KEY = "ispl_tracker_data_v1";
+
+        const App = () => {
+            const [entries, setEntries] = useState(() => {
+                const saved = localStorage.getItem(STORAGE_KEY);
+                return saved ? JSON.parse(saved) : [];
+            });
+            const [tab, setTab] = useState("dashboard");
+
+            useEffect(() => {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(entries));
+            }, [entries]);
+
+            const calculateMetrics = (e) => {
+                const target = (Number(e.staticTarget)||0) + (Number(e.videoTarget)||0);
+                const posted = (Number(e.staticPosted)||0) + (Number(e.videoPosted)||0);
+                return { target, posted, perf: target > 0 ? Math.round((posted / target) * 100) : 0 };
+            };
+
+            const totals = useMemo(() => entries.reduce((a, e) => {
+                const m = calculateMetrics(e);
+                return { t: a.t + m.target, p: a.p + m.posted };
+            }, { t: 0, p: 0 }), [entries]);
+
+            const overallPerf = totals.t > 0 ? Math.round((totals.p / totals.t) * 100) : 0;
+
+            const handleAdd = (e) => {
+                e.preventDefault();
+                const fd = new FormData(e.target);
+                const data = Object.fromEntries(fd.entries());
+                setEntries([...entries, { ...data, id: Date.now() }]);
+                setTab("table");
+            };
+
+            return (
+                <div className="min-h-screen">
+                    <nav className="border-b border-white/10 p-4 flex justify-between items-center bg-black/20">
+                        <span className="font-black text-xl tracking-tighter">ISPL TRACKER</span>
+                        <div className="flex gap-4">
+                            <button onClick={() => setTab("dashboard")} className={`text-xs font-bold ${tab === 'dashboard' ? 'text-indigo-400' : 'text-gray-500'}`}>DASHBOARD</button>
+                            <button onClick={() => setTab("table")} className={`text-xs font-bold ${tab === 'table' ? 'text-indigo-400' : 'text-gray-500'}`}>HISTORY</button>
+                            <button onClick={() => setTab("add")} className="bg-indigo-600 px-3 py-1 rounded text-[10px] font-black">ADD DATA</button>
+                        </div>
+                    </nav>
+
+                    <main className="p-6 max-w-4xl mx-auto">
+                        {tab === "dashboard" && (
+                            <div className="space-y-6">
+                                <div className="bg-white/5 border border-white/10 p-8 rounded-2xl text-center">
+                                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">Overall Efficiency</p>
+                                    <h1 className="text-7xl font-black text-indigo-500">{overallPerf}%</h1>
+                                    <p className="text-gray-400 text-sm mt-4">{totals.p} Posts Published / {totals.t} Target</p>
+                                </div>
+                                
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-white/5 p-4 rounded-xl border border-white/10 text-center">
+                                        <p className="text-[10px] text-gray-500 font-bold mb-1">TOTAL POSTED</p>
+                                        <p className="text-2xl font-bold">{totals.p}</p>
+                                    </div>
+                                    <div className="bg-white/5 p-4 rounded-xl border border-white/10 text-center">
+                                        <p className="text-[10px] text-gray-500 font-bold mb-1">REMAINING GAP</p>
+                                        <p className="text-2xl font-bold text-red-500">{Math.max(0, totals.t - totals.p)}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        {tab === "add" && (
+                            <form onSubmit={handleAdd} className="bg-white/5 p-6 rounded-2xl border border-white/10 grid grid-cols-2 gap-4">
+                                <div className="col-span-2 mb-2"><h2 className="font-bold">Add Monthly Metrics</h2></div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500">MONTH</label>
+                                    <select name="month" className="w-full bg-white/10 p-2 rounded mt-1 text-sm outline-none border border-white/10">
+                                        {MONTHS.map(m => <option key={m} value={m}>{m}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500">SEASON</label>
+                                    <select name="season" className="w-full bg-white/10 p-2 rounded mt-1 text-sm outline-none border border-white/10">
+                                        {SEASON_TYPES.map(s => <option key={s} value={s}>{s}</option>)}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500">STATIC TARGET</label>
+                                    <input name="staticTarget" type="number" className="w-full bg-white/10 p-2 rounded mt-1 text-sm outline-none border border-white/10" required />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500">STATIC POSTED</label>
+                                    <input name="staticPosted" type="number" className="w-full bg-white/10 p-2 rounded mt-1 text-sm outline-none border border-white/10" required />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500">VIDEO TARGET</label>
+                                    <input name="videoTarget" type="number" className="w-full bg-white/10 p-2 rounded mt-1 text-sm outline-none border border-white/10" required />
+                                </div>
+                                <div>
+                                    <label className="text-[10px] font-bold text-gray-500">VIDEO POSTED</label>
+                                    <input name="videoPosted" type="number" className="w-full bg-white/10 p-2 rounded mt-1 text-sm outline-none border border-white/10" required />
+                                </div>
+                                <button type="submit" className="col-span-2 bg-indigo-600 py-3 rounded-lg font-bold mt-4">Save Entry</button>
+                            </form>
+                        )}
+
+                        {tab === "table" && (
+                            <div className="bg-white/5 rounded-2xl border border-white/10 overflow-hidden">
+                                <table className="w-full text-left text-xs">
+                                    <thead className="bg-white/10 font-bold text-gray-400">
+                                        <tr>
+                                            <th className="p-4">MONTH</th>
+                                            <th className="p-4">STATIC</th>
+                                            <th className="p-4">VIDEO</th>
+                                            <th className="p-4">PERF</th>
+                                            <th className="p-4"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {entries.map(e => {
+                                            const m = calculateMetrics(e);
+                                            return (
+                                                <tr key={e.id} className="border-t border-white/5">
+                                                    <td className="p-4 font-bold">{e.month}</td>
+                                                    <td className="p-4">{e.staticPosted}/{e.staticTarget}</td>
+                                                    <td className="p-4">{e.videoPosted}/{e.videoTarget}</td>
+                                                    <td className="p-4 font-bold text-indigo-400">{m.perf}%</td>
+                                                    <td className="p-4">
+                                                        <button onClick={() => setEntries(entries.filter(x => x.id !== e.id))} className="text-red-500 font-bold">DEL</button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        {entries.length === 0 && <tr><td colSpan="5" className="p-10 text-center text-gray-500">No data entries yet.</td></tr>}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </main>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
